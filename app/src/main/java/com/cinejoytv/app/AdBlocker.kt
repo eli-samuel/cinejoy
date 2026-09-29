@@ -37,7 +37,7 @@ class AdBlocker(private val context: Context) {
     fun shouldBlock(uri: Uri): Boolean = uri.host?.let { isBlockedHost(it.lowercase()) } ?: false
 
     fun isBlockedHost(host: String): Boolean =
-        enabled && !isFirstParty(host) && !matches(host, allowed) && matches(host, blocked)
+        enabled && !Site.isFirstParty(host) && !matches(host, allowed) && matches(host, blocked)
 
     fun emptyResponse() = WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
 
@@ -154,8 +154,6 @@ class AdBlocker(private val context: Context) {
             "match-case", "strict",
         )
         private val COSMETIC_EXCEPTIONS = setOf("generichide", "ghide", "elemhide", "ehide", "specifichide", "shide")
-
-        fun isFirstParty(host: String) = host == "cinejoy.pk" || host.endsWith(".cinejoy.pk")
 
         fun matches(host: String, set: Set<String>): Boolean {
             var h = host

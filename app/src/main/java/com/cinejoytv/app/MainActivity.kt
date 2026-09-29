@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Message
 import android.os.SystemClock
+import android.text.InputType
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -23,8 +24,10 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import kotlin.concurrent.thread
@@ -38,8 +41,9 @@ class MainActivity : Activity() {
     private lateinit var cursor: CursorView
     private lateinit var prefs: SharedPreferences
     private lateinit var blocker: AdBlocker
+    private lateinit var updater: Updater
     private lateinit var injectJs: String
-    private var documentStartScript = false
+    private var documentStartScript: ScriptHandler? = null
 
     private var customView: View? = null
     private var customCallback: WebChromeClient.CustomViewCallback? = null
@@ -58,7 +62,8 @@ class MainActivity : Activity() {
         blocker = AdBlocker(this)
         blocker.enabled = prefs.getBoolean("adblock", true)
         blocker.init()
-        injectJs = assets.open("inject.js").bufferedReader().use { it.readText() }
+        Site.load(prefs)
+        updater = Updater(this)
 
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         webView = WebView(this)
@@ -71,6 +76,7 @@ class MainActivity : Activity() {
         setupWebView()
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             webView.loadUrl(startUrl())
+            updater.check(manual = false)
         }
         webView.requestFocus()
     }
@@ -100,10 +106,7 @@ class MainActivity : Activity() {
         webView.isFocusable = true
         webView.isFocusableInTouchMode = true
 
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            WebViewCompat.addDocumentStartJavaScript(webView, injectJs, setOf("*"))
-            documentStartScript = true
-        }
+        installScript()
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
@@ -117,11 +120,11 @@ class MainActivity : Activity() {
                 blockNavigation(Uri.parse(url))
 
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                if (!documentStartScript) view.evaluateJavascript(injectJs, null)
+                if (documentStartScript == null) view.evaluateJavascript(injectJs, null)
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
-                if (!documentStartScript) view.evaluateJavascript(injectJs, null)
+                if (documentStartScript == null) view.evaluateJavascript(injectJs, null)
                 CookieManager.getInstance().flush()
                 saveLastUrl()
             }
@@ -140,7 +143,7 @@ class MainActivity : Activity() {
 
             override fun onHideCustomView() = hideCustomView()
 
-            // Popups: only user-initiated windows pointing at CineJoy itself are allowed,
+            // Popups: only user-initiated windows pointing at the site itself are allowed,
             // and they open in the main WebView instead of a new window.
             override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
                 if (!isUserGesture) { notifyBlocked("popup"); return false }
@@ -171,22 +174,38 @@ class MainActivity : Activity() {
         }
     }
 
+    /** (Re)builds inject.js for the current site and registers it to run at document start. */
+    private fun installScript() {
+        injectJs = assets.open("inject.js").bufferedReader().use { it.readText() }
+            .replace("__SITE_DOMAIN__", Site.domain)
+            .replace("__STRICT__", BuildConfig.STRICT_NAV.toString())
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            documentStartScript?.remove()
+            documentStartScript = WebViewCompat.addDocumentStartJavaScript(webView, injectJs, setOf("*"))
+        }
+    }
+
     private fun handlePopup(probe: WebView, uri: Uri): Boolean {
         val host = uri.host?.lowercase()
-        if (host != null && AdBlocker.isFirstParty(host)) webView.loadUrl(uri.toString()) else notifyBlocked("popup")
+        if (host != null && Site.isFirstParty(host)) webView.loadUrl(uri.toString()) else notifyBlocked("popup")
         probe.post { probe.destroy() }
         return true
     }
 
-    /** Returns true to cancel a top-level navigation (ad redirects, app-store / intent links). */
+    /**
+     * Returns true to cancel a top-level navigation (ad redirects, app-store / intent links).
+     * In strict mode nothing may leave the site, not even clicked links, and the ad blocker switch
+     * doesn't change that.
+     */
     private fun blockNavigation(uri: Uri): Boolean {
         val scheme = uri.scheme?.lowercase()
         if (scheme == "about" || scheme == "data" || scheme == "blob") return false
         if (scheme != "http" && scheme != "https") { notifyBlocked("redirect"); return true }
         val host = uri.host?.lowercase() ?: return true
-        if (AdBlocker.isFirstParty(host)) return false
+        if (Site.isFirstParty(host)) return false
+        if (BuildConfig.STRICT_NAV) { notifyBlocked("redirect"); return true }
         if (!blocker.enabled) return false
-        if (blocker.isBlockedHost(host) || NAV_ALLOWLIST.none { AdBlocker.matches(host, setOf(it)) }) {
+        if (blocker.isBlockedHost(host) || BuildConfig.NAV_ALLOWLIST.none { AdBlocker.matches(host, setOf(it)) }) {
             notifyBlocked("redirect")
             return true
         }
@@ -358,15 +377,17 @@ class MainActivity : Activity() {
             "Navigation: ${if (cursorEnabled) "Pointer" else "Focus"}",
             "Ad blocker: ${onOff(blocker.enabled)} (${blocker.ruleCount} domains)",
             "Desktop site: ${onOff(desktop)}",
+            "Site address: ${Site.domain}",
             "Update filter lists",
             "Clear cache (keeps login)",
+            "Check for updates (build ${BuildConfig.VERSION_CODE})",
             "Exit",
         )
         AlertDialog.Builder(this)
             .setTitle(R.string.app_name)
             .setItems(items) { _, which ->
                 when (which) {
-                    0 -> webView.loadUrl(HOME)
+                    0 -> webView.loadUrl(Site.home)
                     1 -> webView.reload()
                     2 -> {
                         cursorEnabled = !cursorEnabled
@@ -383,7 +404,8 @@ class MainActivity : Activity() {
                         webView.settings.userAgentString = userAgent()
                         webView.reload()
                     }
-                    5 -> {
+                    5 -> editSiteAddress()
+                    6 -> {
                         Toast.makeText(this, "Updating filter lists…", Toast.LENGTH_SHORT).show()
                         thread {
                             val ok = blocker.update()
@@ -393,11 +415,45 @@ class MainActivity : Activity() {
                             }
                         }
                     }
-                    6 -> { webView.clearCache(true); webView.reload() }
-                    7 -> finish()
+                    7 -> { webView.clearCache(true); webView.reload() }
+                    8 -> updater.check(manual = true)
+                    9 -> finish()
                 }
             }
             .show()
+    }
+
+    /** Lets the user point the app at a new address when the site moves domains. */
+    private fun editSiteAddress() {
+        val input = EditText(this).apply {
+            setText(Site.home)
+            setSelection(text.length)
+            setSingleLine()
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val box = FrameLayout(this).apply {
+            setPadding(pad, pad / 2, pad, 0)
+            addView(input)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Site address")
+            .setMessage("If the site moves to a new address, enter it here.\nDefault: ${BuildConfig.HOME_URL}")
+            .setView(box)
+            .setPositiveButton("Save") { _, _ -> changeSite(input.text.toString()) }
+            .setNeutralButton("Default") { _, _ -> changeSite(BuildConfig.HOME_URL) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun changeSite(address: String) {
+        if (!Site.change(prefs, address)) {
+            Toast.makeText(this, "Not a valid address", Toast.LENGTH_LONG).show()
+            return
+        }
+        prefs.edit().remove("lastUrl").apply()
+        installScript()
+        webView.loadUrl(Site.home)
     }
 
     private fun updateCursorVisibility() {
@@ -413,15 +469,15 @@ class MainActivity : Activity() {
     // ---------------------------------------------------------------- state
 
     private fun startUrl(): String {
-        val last = prefs.getString("lastUrl", null) ?: return HOME
-        val host = Uri.parse(last).host?.lowercase() ?: return HOME
-        return if (AdBlocker.isFirstParty(host)) last else HOME
+        val last = prefs.getString("lastUrl", null) ?: return Site.home
+        val host = Uri.parse(last).host?.lowercase() ?: return Site.home
+        return if (Site.isFirstParty(host)) last else Site.home
     }
 
     private fun saveLastUrl() {
         val url = webView.url ?: return
         val host = Uri.parse(url).host?.lowercase() ?: return
-        if (AdBlocker.isFirstParty(host)) prefs.edit().putString("lastUrl", url).apply()
+        if (Site.isFirstParty(host)) prefs.edit().putString("lastUrl", url).apply()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -448,12 +504,8 @@ class MainActivity : Activity() {
     }
 
     companion object {
-        const val HOME = "https://cinejoy.pk/"
         private val MATCH = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-
-        // Off-site top-level navigations allowed besides CineJoy itself (sign-in providers).
-        private val NAV_ALLOWLIST = listOf("google.com", "facebook.com", "apple.com")
     }
 }
