@@ -6,6 +6,10 @@ plugins {
 // GitHub Actions run number, so every CI build is numbered higher than the one before it.
 val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 
+// Fixed release key (see README "Signing key"). CI decodes it from GitHub Secrets; local builds
+// without it fall back to the debug key.
+val releaseKeystore: String? = System.getenv("SIGNING_KEYSTORE")
+
 android {
     namespace = "com.cinejoytv.app"
     compileSdk = 34
@@ -40,11 +44,22 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("SIGNING_PASSWORD")
+                keyAlias = "release"
+                keyPassword = System.getenv("SIGNING_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Signed with the debug key so the APK can be sideloaded directly.
-            signingConfig = signingConfigs.getByName("debug")
+            // Every build must be signed with the same key, or Android refuses to install it as an update.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
