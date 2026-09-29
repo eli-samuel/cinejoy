@@ -7,7 +7,7 @@ A lightweight Android / Fire TV wrapper for https://cinejoy.pk/ with built-in ad
 - Full-screen WebView with JavaScript, cookies, localStorage and IndexedDB enabled.
 - HTML5 fullscreen video, with DRM (protected media) allowed.
 - Fire TV remote support:
-  - **D-pad** moves a red highlight between clickable items (movie cards, buttons, menus, search box), like a TV app. **Select** opens the highlighted item. When nothing is left in that direction, the page scrolls so more content can load.
+  - **D-pad** moves a soft white highlight between clickable items (movie cards, buttons, menus, search box), like a TV app. **Select** opens the highlighted item. When nothing is left in that direction, the page scrolls so more content can load.
   - Menu > **Navigation: Pointer** switches to an on-screen pointer instead, for controls the highlight can't reach, such as buttons inside an embedded video player.
   - In fullscreen video: **Select** / **Play-Pause** toggles playback, **Left/Right** and **Rewind/Fast-forward** seek 10 s.
   - **Back** exits fullscreen, then goes back in history. Press it twice on the first page to exit.

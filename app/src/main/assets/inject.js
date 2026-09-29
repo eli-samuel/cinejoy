@@ -165,8 +165,10 @@
   };
 
   // Light cosmetic filtering for common ad containers.
-  var css = '.cjtv-focus{outline:4px solid #E50914!important;outline-offset:2px!important;' +
-    'box-shadow:0 0 0 8px rgba(229,9,20,.35)!important}' + [
+  // Focus style: soft white ring + lift, similar to native TV launchers.
+  var css = '.cjtv-focus{outline:2px solid rgba(255,255,255,.85)!important;outline-offset:3px!important;' +
+    'border-radius:8px;box-shadow:0 0 0 7px rgba(255,255,255,.14),0 10px 28px rgba(0,0,0,.55)!important;' +
+    'filter:brightness(1.12);transition:outline-offset .15s ease,box-shadow .15s ease,filter .15s ease}' + [
     'ins.adsbygoogle', '[id^="google_ads_"]', '[id^="div-gpt-ad"]',
     'iframe[src*="doubleclick.net"]', 'iframe[src*="googlesyndication"]',
     '[id*="ScriptRoot"]', '[class*="popunder"]', '[id*="popunder"]',
