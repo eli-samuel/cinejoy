@@ -30,6 +30,7 @@ import android.widget.Toast
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import java.io.IOException
 import kotlin.concurrent.thread
 import kotlin.math.min
 import kotlin.math.sign
@@ -174,9 +175,17 @@ class MainActivity : Activity() {
         }
     }
 
-    /** (Re)builds inject.js for the current site and registers it to run at document start. */
+    /**
+     * (Re)builds inject.js for the current site and registers it to run at document start.
+     * A flavor can add site-specific tweaks in src/<flavor>/assets/site.js.
+     */
     private fun installScript() {
-        injectJs = assets.open("inject.js").bufferedReader().use { it.readText() }
+        val siteJs = try {
+            assets.open("site.js").bufferedReader().use { it.readText() }
+        } catch (e: IOException) {
+            ""
+        }
+        injectJs = (assets.open("inject.js").bufferedReader().use { it.readText() } + "\n" + siteJs)
             .replace("__SITE_DOMAIN__", Site.domain)
             .replace("__STRICT__", BuildConfig.STRICT_NAV.toString())
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {

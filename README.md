@@ -81,6 +81,7 @@ A push to `main` releases both apps together, so both offer an update even if on
 1. In `app/build.gradle.kts`, add a flavor under `productFlavors`. Give it an `applicationId`, `HOME_URL`, `NAV_ALLOWLIST`, `STRICT_NAV` and `APK_NAME`.
 2. Add `app/src/<flavor>/res/` with `values/strings.xml` (`app_name`), `values/colors.xml` (`accent`), `mipmap-*/ic_launcher.png` and `drawable-xhdpi/banner.png` (640×360).
 3. In `.github/workflows/build.yml`, copy the new APK and add it to the release files.
+4. Optional: site-specific tweaks go in `app/src/<flavor>/assets/site.js`, which runs at document start on every page. NHL TV uses it to start in the site's dark theme; the site's own theme toggle still switches back to light, and that choice is kept.
 
 ## Notes
 
