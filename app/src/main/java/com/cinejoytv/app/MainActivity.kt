@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Message
 import android.os.SystemClock
+import android.text.InputType
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -23,8 +24,10 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import kotlin.concurrent.thread
@@ -39,7 +42,7 @@ class MainActivity : Activity() {
     private lateinit var prefs: SharedPreferences
     private lateinit var blocker: AdBlocker
     private lateinit var injectJs: String
-    private var documentStartScript = false
+    private var documentStartScript: ScriptHandler? = null
 
     private var customView: View? = null
     private var customCallback: WebChromeClient.CustomViewCallback? = null
@@ -58,9 +61,7 @@ class MainActivity : Activity() {
         blocker = AdBlocker(this)
         blocker.enabled = prefs.getBoolean("adblock", true)
         blocker.init()
-        injectJs = assets.open("inject.js").bufferedReader().use { it.readText() }
-            .replace("__SITE_DOMAIN__", Site.domain)
-            .replace("__STRICT__", BuildConfig.STRICT_NAV.toString())
+        Site.load(prefs)
 
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         webView = WebView(this)
@@ -102,10 +103,7 @@ class MainActivity : Activity() {
         webView.isFocusable = true
         webView.isFocusableInTouchMode = true
 
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-            WebViewCompat.addDocumentStartJavaScript(webView, injectJs, setOf("*"))
-            documentStartScript = true
-        }
+        installScript()
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
@@ -119,11 +117,11 @@ class MainActivity : Activity() {
                 blockNavigation(Uri.parse(url))
 
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                if (!documentStartScript) view.evaluateJavascript(injectJs, null)
+                if (documentStartScript == null) view.evaluateJavascript(injectJs, null)
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
-                if (!documentStartScript) view.evaluateJavascript(injectJs, null)
+                if (documentStartScript == null) view.evaluateJavascript(injectJs, null)
                 CookieManager.getInstance().flush()
                 saveLastUrl()
             }
@@ -170,6 +168,17 @@ class MainActivity : Activity() {
 
             // Avoids the grey "play" placeholder some WebViews draw before a video starts.
             override fun getDefaultVideoPoster(): Bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        }
+    }
+
+    /** (Re)builds inject.js for the current site and registers it to run at document start. */
+    private fun installScript() {
+        injectJs = assets.open("inject.js").bufferedReader().use { it.readText() }
+            .replace("__SITE_DOMAIN__", Site.domain)
+            .replace("__STRICT__", BuildConfig.STRICT_NAV.toString())
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            documentStartScript?.remove()
+            documentStartScript = WebViewCompat.addDocumentStartJavaScript(webView, injectJs, setOf("*"))
         }
     }
 
@@ -365,6 +374,7 @@ class MainActivity : Activity() {
             "Navigation: ${if (cursorEnabled) "Pointer" else "Focus"}",
             "Ad blocker: ${onOff(blocker.enabled)} (${blocker.ruleCount} domains)",
             "Desktop site: ${onOff(desktop)}",
+            "Site address: ${Site.domain}",
             "Update filter lists",
             "Clear cache (keeps login)",
             "Exit",
@@ -390,7 +400,8 @@ class MainActivity : Activity() {
                         webView.settings.userAgentString = userAgent()
                         webView.reload()
                     }
-                    5 -> {
+                    5 -> editSiteAddress()
+                    6 -> {
                         Toast.makeText(this, "Updating filter lists…", Toast.LENGTH_SHORT).show()
                         thread {
                             val ok = blocker.update()
@@ -400,11 +411,44 @@ class MainActivity : Activity() {
                             }
                         }
                     }
-                    6 -> { webView.clearCache(true); webView.reload() }
-                    7 -> finish()
+                    7 -> { webView.clearCache(true); webView.reload() }
+                    8 -> finish()
                 }
             }
             .show()
+    }
+
+    /** Lets the user point the app at a new address when the site moves domains. */
+    private fun editSiteAddress() {
+        val input = EditText(this).apply {
+            setText(Site.home)
+            setSelection(text.length)
+            setSingleLine()
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val box = FrameLayout(this).apply {
+            setPadding(pad, pad / 2, pad, 0)
+            addView(input)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Site address")
+            .setMessage("If the site moves to a new address, enter it here.\nDefault: ${BuildConfig.HOME_URL}")
+            .setView(box)
+            .setPositiveButton("Save") { _, _ -> changeSite(input.text.toString()) }
+            .setNeutralButton("Default") { _, _ -> changeSite(BuildConfig.HOME_URL) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun changeSite(address: String) {
+        if (!Site.change(prefs, address)) {
+            Toast.makeText(this, "Not a valid address", Toast.LENGTH_LONG).show()
+            return
+        }
+        prefs.edit().remove("lastUrl").apply()
+        installScript()
+        webView.loadUrl(Site.home)
     }
 
     private fun updateCursorVisibility() {
