@@ -7,10 +7,11 @@ A lightweight Android / Fire TV wrapper for https://cinejoy.pk/ with built-in ad
 - Full-screen WebView with JavaScript, cookies, localStorage and IndexedDB enabled.
 - HTML5 fullscreen video, with DRM (protected media) allowed.
 - Fire TV remote support:
-  - **D-pad** moves an on-screen pointer. **Select** clicks. At the screen edge, the page (or the carousel under the pointer) scrolls.
+  - **D-pad** moves a red highlight between clickable items (movie cards, buttons, menus, search box), like a TV app. **Select** opens the highlighted item. When nothing is left in that direction, the page scrolls so more content can load.
+  - Menu > **Navigation: Pointer** switches to an on-screen pointer instead, for controls the highlight can't reach, such as buttons inside an embedded video player.
   - In fullscreen video: **Select** / **Play-Pause** toggles playback, **Left/Right** and **Rewind/Fast-forward** seek 10 s.
   - **Back** exits fullscreen, then goes back in history. Press it twice on the first page to exit.
-  - **Menu (≡)** opens options: Home, Reload, pointer on/off (off uses normal focus navigation), ad blocker on/off, desktop site, update filter lists, clear cache, exit.
+  - **Menu (≡)** opens options: Home, Reload, navigation mode (focus highlight or pointer), ad blocker on/off, desktop site, update filter lists, clear cache, exit.
 - Login and session are kept (cookies are flushed to disk), and the app reopens the last CineJoy page you had open.
 - Ad and tracker blocking:
   - Uses uBlock Origin filters, EasyList, EasyPrivacy and Peter Lowe's list. They're downloaded on first run and refreshed every 3 days. A built-in list covers the time before the first download.

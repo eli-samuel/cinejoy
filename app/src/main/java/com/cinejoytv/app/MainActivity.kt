@@ -54,7 +54,7 @@ class MainActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         prefs = getSharedPreferences("cinejoy", MODE_PRIVATE)
-        cursorEnabled = prefs.getBoolean("cursor", true)
+        cursorEnabled = prefs.getBoolean("pointer", false)
         blocker = AdBlocker(this)
         blocker.enabled = prefs.getBoolean("adblock", true)
         blocker.init()
@@ -256,13 +256,45 @@ class MainActivity : Activity() {
                     return true
                 }
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                    if (first) sendTouch(MotionEvent.ACTION_DOWN)
-                    else if (event.action == KeyEvent.ACTION_UP) sendTouch(MotionEvent.ACTION_UP)
+                    if (first) sendTouch(MotionEvent.ACTION_DOWN, cursor.cx, cursor.cy)
+                    else if (event.action == KeyEvent.ACTION_UP) sendTouch(MotionEvent.ACTION_UP, cursor.cx, cursor.cy)
+                    return true
+                }
+            }
+        } else {
+            // Focus navigation: the D-pad moves a highlight between clickable items.
+            val dir = when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> "left"
+                KeyEvent.KEYCODE_DPAD_RIGHT -> "right"
+                KeyEvent.KEYCODE_DPAD_UP -> "up"
+                KeyEvent.KEYCODE_DPAD_DOWN -> "down"
+                else -> null
+            }
+            if (dir != null) {
+                if (down) webView.evaluateJavascript("window.__cjtvNav&&__cjtvNav('$dir')", null)
+                return true
+            }
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                    if (first) clickFocused()
                     return true
                 }
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    /** Taps the centre of the highlighted element with a real touch, so it counts as a user gesture. */
+    private fun clickFocused() {
+        webView.evaluateJavascript("window.__cjtvTarget?__cjtvTarget():null") { result ->
+            val parts = result?.trim('[', ']')?.split(',')?.mapNotNull { it.trim().toFloatOrNull() }
+            if (parts == null || parts.size != 3 || parts[2] <= 0f) return@evaluateJavascript
+            val scale = webView.width / parts[2]
+            val x = parts[0] * scale
+            val y = parts[1] * scale
+            sendTouch(MotionEvent.ACTION_DOWN, x, y)
+            sendTouch(MotionEvent.ACTION_UP, x, y)
+        }
     }
 
     private fun moveCursor(event: KeyEvent) {
@@ -285,14 +317,14 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun sendTouch(action: Int) {
+    private fun sendTouch(action: Int, x: Float, y: Float) {
         val now = SystemClock.uptimeMillis()
         if (action == MotionEvent.ACTION_DOWN) touchDownTime = now
-        val ev = MotionEvent.obtain(touchDownTime, now, action, cursor.cx, cursor.cy, 0)
+        val ev = MotionEvent.obtain(touchDownTime, now, action, x, y, 0)
         ev.source = InputDevice.SOURCE_TOUCHSCREEN
         webView.dispatchTouchEvent(ev)
         ev.recycle()
-        cursor.wake()
+        if (cursorEnabled) cursor.wake()
     }
 
     private fun media(cmd: String, value: Int = 0) {
@@ -323,7 +355,7 @@ class MainActivity : Activity() {
         val items = arrayOf(
             "Home",
             "Reload",
-            "Pointer: ${onOff(cursorEnabled)}",
+            "Navigation: ${if (cursorEnabled) "Pointer" else "Focus"}",
             "Ad blocker: ${onOff(blocker.enabled)} (${blocker.ruleCount} domains)",
             "Desktop site: ${onOff(desktop)}",
             "Update filter lists",
@@ -338,7 +370,7 @@ class MainActivity : Activity() {
                     1 -> webView.reload()
                     2 -> {
                         cursorEnabled = !cursorEnabled
-                        prefs.edit().putBoolean("cursor", cursorEnabled).apply()
+                        prefs.edit().putBoolean("pointer", cursorEnabled).apply()
                         updateCursorVisibility()
                     }
                     3 -> {
