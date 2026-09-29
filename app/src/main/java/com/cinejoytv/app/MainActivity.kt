@@ -60,6 +60,7 @@ class MainActivity : Activity() {
         blocker.init()
         injectJs = assets.open("inject.js").bufferedReader().use { it.readText() }
             .replace("__SITE_DOMAIN__", Site.domain)
+            .replace("__STRICT__", BuildConfig.STRICT_NAV.toString())
 
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         webView = WebView(this)
@@ -179,13 +180,18 @@ class MainActivity : Activity() {
         return true
     }
 
-    /** Returns true to cancel a top-level navigation (ad redirects, app-store / intent links). */
+    /**
+     * Returns true to cancel a top-level navigation (ad redirects, app-store / intent links).
+     * In strict mode nothing may leave the site, not even clicked links, and the ad blocker switch
+     * doesn't change that.
+     */
     private fun blockNavigation(uri: Uri): Boolean {
         val scheme = uri.scheme?.lowercase()
         if (scheme == "about" || scheme == "data" || scheme == "blob") return false
         if (scheme != "http" && scheme != "https") { notifyBlocked("redirect"); return true }
         val host = uri.host?.lowercase() ?: return true
         if (Site.isFirstParty(host)) return false
+        if (BuildConfig.STRICT_NAV) { notifyBlocked("redirect"); return true }
         if (!blocker.enabled) return false
         if (blocker.isBlockedHost(host) || BuildConfig.NAV_ALLOWLIST.none { AdBlocker.matches(host, setOf(it)) }) {
             notifyBlocked("redirect")

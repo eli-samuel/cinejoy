@@ -35,12 +35,15 @@ android {
             buildConfigField("String", "HOME_URL", "\"https://cinejoy.pk/\"")
             // Off-site top-level navigations allowed besides the site itself (sign-in providers).
             buildConfigField("String[]", "NAV_ALLOWLIST", "{\"google.com\", \"facebook.com\", \"apple.com\"}")
+            buildConfigField("boolean", "STRICT_NAV", "false")
         }
         create("nhl") {
             dimension = "site"
             applicationId = "com.firetvapps.nhltv"
             buildConfigField("String", "HOME_URL", "\"https://nhlstreams.io/\"")
             buildConfigField("String[]", "NAV_ALLOWLIST", "{}")
+            // Stream sites hide invisible click-overlays that open ads, so nothing may leave the site.
+            buildConfigField("boolean", "STRICT_NAV", "true")
         }
     }
 

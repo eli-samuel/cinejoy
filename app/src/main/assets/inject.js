@@ -14,6 +14,50 @@
     try { window.open = function () { return null; }; } catch (e) {}
   }
 
+  // --- Strict mode: invisible layers that catch clicks to open ads stop catching clicks ---
+  var STRICT = __STRICT__;
+  var clearAt = function () {};
+  var isOverlay = function () { return false; };
+  if (STRICT) {
+    var clear = function (c) {
+      var m = /rgba\([^)]*,\s*([\d.]+)\)/.exec(c);
+      return c === 'transparent' || (m && parseFloat(m[1]) < 0.1);
+    };
+    // A layer positioned above the page that shows nothing itself: fully see-through, or an empty
+    // transparent box (no text, media or controls).
+    isOverlay = function (el) {
+      if (!el || el === document.body || el === document.documentElement || el.__cjtvOverlay) return false;
+      var s = getComputedStyle(el);
+      if (s.position !== 'fixed' && s.position !== 'absolute') return false;
+      if (!(parseInt(s.zIndex, 10) >= 1000)) return false;
+      if (parseFloat(s.opacity) < 0.1) return true;
+      if (!clear(s.backgroundColor) || s.backgroundImage !== 'none') return false;
+      if ((el.innerText || '').trim()) return false;
+      return !el.querySelector('video,iframe,canvas,svg,img,input,select,textarea,button');
+    };
+    // Lets clicks at (x, y) pass through any overlays there, without removing them from the page.
+    // `keep` is the element about to be clicked; it and its ancestors are never touched.
+    clearAt = function (x, y, keep) {
+      for (var i = 0; i < 6; i++) {
+        var hit = null;
+        for (var e = document.elementFromPoint(x, y), d = 0; e && d < 5; e = e.parentElement, d++) {
+          if (keep && (keep === e || keep.contains(e) || e.contains(keep))) break;
+          if (isOverlay(e)) { hit = e; break; }
+        }
+        if (!hit) return;
+        hit.__cjtvOverlay = true;
+        hit.style.setProperty('pointer-events', 'none', 'important');
+      }
+    };
+    // Overlays are often added late or re-added, so check a grid of points regularly.
+    setInterval(function () {
+      if (!document.body) return;
+      [0.2, 0.5, 0.8].forEach(function (fx) {
+        [0.25, 0.5, 0.75].forEach(function (fy) { clearAt(innerWidth * fx, innerHeight * fy); });
+      });
+    }, 1500);
+  }
+
   // --- Remote control of <video> elements, relayed into cross-origin frames ---
   function pickVideo() {
     var v = document.querySelectorAll('video'), i;
@@ -78,7 +122,7 @@
     var r = rect(e);
     if (r.width < 6 || r.height < 6) return false;
     var s = getComputedStyle(e);
-    return s.visibility !== 'hidden' && s.display !== 'none' && parseFloat(s.opacity) > 0.05;
+    return s.visibility !== 'hidden' && s.display !== 'none' && parseFloat(s.opacity) > 0.05 && !isOverlay(e);
   }
 
   // Clickable elements, including JS-driven cards that only advertise themselves via cursor:pointer.
@@ -159,11 +203,13 @@
   };
 
   // Centre of the selected element in CSS pixels, plus viewport width for scaling.
+  // In strict mode, overlays covering that point are cleared first so the tap reaches the element.
   window.__cjtvTarget = function () {
     if (!current || !current.isConnected) return null;
     var r = rect(current);
     var x = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1);
     var y = Math.min(Math.max(r.top + r.height / 2, 1), innerHeight - 1);
+    clearAt(x, y, current);
     return [x, y, innerWidth];
   };
 
