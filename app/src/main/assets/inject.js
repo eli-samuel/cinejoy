@@ -3,7 +3,10 @@
   if (window.__cjtv) return;
   window.__cjtv = true;
 
-  var firstParty = /(^|\.)cinejoy\.pk$/i.test(location.hostname);
+  // Filled in by MainActivity with the wrapped site's domain.
+  var SITE = '__SITE_DOMAIN__';
+  var host = location.hostname.toLowerCase();
+  var firstParty = host === SITE || host.slice(-SITE.length - 1) === '.' + SITE;
   var isTop = window === window.top;
 
   // Third-party frames (embedded players, ad iframes) never get to open popups.

@@ -2,7 +2,6 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -20,17 +19,25 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.7"
+      # Builds every flavor: one APK per site.
       - run: gradle assembleRelease
-      - run: cp app/build/outputs/apk/release/app-release.apk cinejoy-tv.apk
+      - run: |
+          cp app/build/outputs/apk/cinejoy/release/app-cinejoy-release.apk cinejoy-tv.apk
+          cp app/build/outputs/apk/nhl/release/app-nhl-release.apk nhl-tv.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: cinejoy-tv
-          path: cinejoy-tv.apk
-      # Publishes a stable public URL that the Fire TV "Downloader" app can fetch:
+          name: apks
+          path: "*.apk"
+      # Only main publishes a release. Other branches just check that the build works.
+      # Stable public URLs that the Fire TV "Downloader" app can fetch:
       # https://github.com/<user>/<repo>/releases/latest/download/cinejoy-tv.apk
-      - uses: softprops/action-gh-release@v2
+      # https://github.com/<user>/<repo>/releases/latest/download/nhl-tv.apk
+      - if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: CineJoy TV build ${{ github.run_number }}
-          files: cinejoy-tv.apk
+          name: Fire TV apps build ${{ github.run_number }}
+          files: |
+            cinejoy-tv.apk
+            nhl-tv.apk
           make_latest: true

@@ -59,6 +59,7 @@ class MainActivity : Activity() {
         blocker.enabled = prefs.getBoolean("adblock", true)
         blocker.init()
         injectJs = assets.open("inject.js").bufferedReader().use { it.readText() }
+            .replace("__SITE_DOMAIN__", Site.domain)
 
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         webView = WebView(this)
@@ -140,7 +141,7 @@ class MainActivity : Activity() {
 
             override fun onHideCustomView() = hideCustomView()
 
-            // Popups: only user-initiated windows pointing at CineJoy itself are allowed,
+            // Popups: only user-initiated windows pointing at the site itself are allowed,
             // and they open in the main WebView instead of a new window.
             override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean {
                 if (!isUserGesture) { notifyBlocked("popup"); return false }
@@ -173,7 +174,7 @@ class MainActivity : Activity() {
 
     private fun handlePopup(probe: WebView, uri: Uri): Boolean {
         val host = uri.host?.lowercase()
-        if (host != null && AdBlocker.isFirstParty(host)) webView.loadUrl(uri.toString()) else notifyBlocked("popup")
+        if (host != null && Site.isFirstParty(host)) webView.loadUrl(uri.toString()) else notifyBlocked("popup")
         probe.post { probe.destroy() }
         return true
     }
@@ -184,9 +185,9 @@ class MainActivity : Activity() {
         if (scheme == "about" || scheme == "data" || scheme == "blob") return false
         if (scheme != "http" && scheme != "https") { notifyBlocked("redirect"); return true }
         val host = uri.host?.lowercase() ?: return true
-        if (AdBlocker.isFirstParty(host)) return false
+        if (Site.isFirstParty(host)) return false
         if (!blocker.enabled) return false
-        if (blocker.isBlockedHost(host) || NAV_ALLOWLIST.none { AdBlocker.matches(host, setOf(it)) }) {
+        if (blocker.isBlockedHost(host) || BuildConfig.NAV_ALLOWLIST.none { AdBlocker.matches(host, setOf(it)) }) {
             notifyBlocked("redirect")
             return true
         }
@@ -366,7 +367,7 @@ class MainActivity : Activity() {
             .setTitle(R.string.app_name)
             .setItems(items) { _, which ->
                 when (which) {
-                    0 -> webView.loadUrl(HOME)
+                    0 -> webView.loadUrl(Site.home)
                     1 -> webView.reload()
                     2 -> {
                         cursorEnabled = !cursorEnabled
@@ -413,15 +414,15 @@ class MainActivity : Activity() {
     // ---------------------------------------------------------------- state
 
     private fun startUrl(): String {
-        val last = prefs.getString("lastUrl", null) ?: return HOME
-        val host = Uri.parse(last).host?.lowercase() ?: return HOME
-        return if (AdBlocker.isFirstParty(host)) last else HOME
+        val last = prefs.getString("lastUrl", null) ?: return Site.home
+        val host = Uri.parse(last).host?.lowercase() ?: return Site.home
+        return if (Site.isFirstParty(host)) last else Site.home
     }
 
     private fun saveLastUrl() {
         val url = webView.url ?: return
         val host = Uri.parse(url).host?.lowercase() ?: return
-        if (AdBlocker.isFirstParty(host)) prefs.edit().putString("lastUrl", url).apply()
+        if (Site.isFirstParty(host)) prefs.edit().putString("lastUrl", url).apply()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -448,12 +449,8 @@ class MainActivity : Activity() {
     }
 
     companion object {
-        const val HOME = "https://cinejoy.pk/"
         private val MATCH = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-
-        // Off-site top-level navigations allowed besides CineJoy itself (sign-in providers).
-        private val NAV_ALLOWLIST = listOf("google.com", "facebook.com", "apple.com")
     }
 }
