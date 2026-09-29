@@ -37,6 +37,8 @@ android {
             buildConfigField("String", "HOME_URL", "\"https://cinejoy.pk/\"")
             // Off-site top-level navigations allowed besides the site itself (sign-in providers).
             buildConfigField("String[]", "NAV_ALLOWLIST", "{\"google.com\", \"facebook.com\", \"apple.com\"}")
+            // Extra domains this app always blocks, even with the ad blocker off.
+            buildConfigField("String[]", "SITE_BLOCKLIST", "{}")
             buildConfigField("boolean", "STRICT_NAV", "false")
             // Release asset name; must match the file names in .github/workflows/build.yml.
             buildConfigField("String", "APK_NAME", "\"cinejoy-tv.apk\"")
@@ -46,6 +48,8 @@ android {
             applicationId = "com.firetvapps.nhltv"
             buildConfigField("String", "HOME_URL", "\"https://nhlstreams.io/\"")
             buildConfigField("String[]", "NAV_ALLOWLIST", "{}")
+            // The site's stream chat (not wanted, and it slows the page down).
+            buildConfigField("String[]", "SITE_BLOCKLIST", "{\"chatango.com\"}")
             // Stream sites hide invisible click-overlays that open ads, so nothing may leave the site.
             buildConfigField("boolean", "STRICT_NAV", "true")
             buildConfigField("String", "APK_NAME", "\"nhl-tv.apk\"")

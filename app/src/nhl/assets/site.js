@@ -11,9 +11,20 @@
     }
   } catch (e) {}
 
-  // Game pages open with the stream chat collapsed. The site's chat button toggles the
-  // "hide_chat" class on <body>, so it still opens the chat.
+  // No stream chat: the app blocks chatango.com (SITE_BLOCKLIST), and this removes the chat panel
+  // and its open/close buttons. "hide_chat" is the site's own class that gives the player the
+  // chat's width.
+  var styled = false;
+  function addStyle() {
+    styled = true;
+    var style = document.createElement('style');
+    style.textContent = 'html body .chatbox_area,html body .chat_hide_button{display:none!important}';
+    (document.head || document.documentElement).appendChild(style);
+  }
+  // At document start there may be no <html> element yet.
+  if (document.documentElement) addStyle();
   document.addEventListener('DOMContentLoaded', function () {
+    if (!styled) addStyle();
     if (document.querySelector('.chatbox_area')) document.body.classList.add('hide_chat');
   });
 })();
