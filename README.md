@@ -33,7 +33,7 @@ Each app has its own name, icon and app ID, so they install side by side.
 Leaving the site works differently per app:
 
 - **CineJoy TV (normal mode):** redirects that take the whole page away from the site (to ad domains, other sites, or `intent://` / app-store links) are cancelled. Google, Facebook and Apple sign-in are allowed.
-- **NHL TV (strict mode):** nothing may leave the site, not even links you click, and turning the ad blocker off doesn't change that. Invisible click-catching layers placed over the page (used to open ads on the first click) are made click-through, and the focus highlight skips them. Embedded players still load inside the page.
+- **NHL TV (strict mode):** nothing may leave the site, not even links you click, and turning the ad blocker off doesn't change that. Invisible click-catching layers placed over the page (used to open ads on the first click) are made click-through, and the focus highlight skips them. Embedded players still load inside the page. The `sandbox` attribute is removed from iframes, because some stream players refuse to play in a sandboxed frame ("remove the sandbox attribute"), and the app already blocks what the sandbox would.
 
 ## Signing key (one-time setup)
 
@@ -79,9 +79,9 @@ A push to `main` releases both apps together, so both offer an update even if on
 ## Adding another site
 
 1. In `app/build.gradle.kts`, add a flavor under `productFlavors`. Give it an `applicationId`, `HOME_URL`, `NAV_ALLOWLIST`, `STRICT_NAV` and `APK_NAME`.
-2. Add `app/src/<flavor>/res/` with `values/strings.xml` (`app_name`), `values/colors.xml` (`accent`), `mipmap-*/ic_launcher.png` and `drawable-xhdpi/banner.png` (640×360).
+2. Add `app/src/<flavor>/res/` with `values/strings.xml` (`app_name`), `values/colors.xml` (`accent`), `mipmap-*/ic_launcher.png` and `drawable-xhdpi/banner.png` (640×360). The banner is also the Fire TV home screen tile: for sideloaded apps, Fire TV ignores `android:banner` and uses the icon, so the manifest's TV entry (`.TvLauncher`) uses the banner as its icon.
 3. In `.github/workflows/build.yml`, copy the new APK and add it to the release files.
-4. Optional: site-specific tweaks go in `app/src/<flavor>/assets/site.js`, which runs at document start on every page. NHL TV uses it to start in the site's dark theme; the site's own theme toggle still switches back to light, and that choice is kept.
+4. Optional: site-specific tweaks go in `app/src/<flavor>/assets/site.js`, which runs at document start on every page. NHL TV uses it to start in the site's dark theme (the site's own theme toggle still switches back to light, and that choice is kept) and to remove the stream chat. The chat's domain (`chatango.com`) is also blocked through the flavor's `SITE_BLOCKLIST` in `app/build.gradle.kts`, so it never loads.
 
 ## Notes
 

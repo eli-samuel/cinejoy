@@ -111,7 +111,11 @@ class MainActivity : Activity() {
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
-                if (!request.isForMainFrame && blocker.shouldBlock(request.url)) blocker.emptyResponse() else null
+                if (!request.isForMainFrame && (blocker.shouldBlock(request.url) || siteBlocked(request.url))) {
+                    blocker.emptyResponse()
+                } else {
+                    null
+                }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
                 request.isForMainFrame && blockNavigation(request.url)
@@ -192,6 +196,11 @@ class MainActivity : Activity() {
             documentStartScript?.remove()
             documentStartScript = WebViewCompat.addDocumentStartJavaScript(webView, injectJs, setOf("*"))
         }
+    }
+
+    private fun siteBlocked(uri: Uri): Boolean {
+        val host = uri.host?.lowercase() ?: return false
+        return AdBlocker.matches(host, SITE_BLOCKLIST)
     }
 
     private fun handlePopup(probe: WebView, uri: Uri): Boolean {
@@ -513,6 +522,7 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        private val SITE_BLOCKLIST = BuildConfig.SITE_BLOCKLIST.toSet()
         private val MATCH = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         private const val DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
