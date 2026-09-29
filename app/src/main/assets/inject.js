@@ -56,6 +56,50 @@
         [0.25, 0.5, 0.75].forEach(function (fy) { clearAt(innerWidth * fx, innerHeight * fy); });
       });
     }, 1500);
+
+    // Stream players refuse to play inside a sandboxed iframe ("remove the sandbox attribute").
+    // The app already blocks popups and off-site navigation itself, so the sandbox is dropped.
+    var unsandbox = function (f) {
+      if (!f.hasAttribute || !f.hasAttribute('sandbox')) return;
+      f.removeAttribute('sandbox');
+      var src = f.getAttribute('src');
+      if (!src || !f.isConnected) return;
+      // Sandbox flags are fixed when the frame navigates, so a frame that already started loading
+      // is loaded again. Going via about:blank makes it a full load even when the URL has a #hash.
+      f.addEventListener('load', function again() {
+        try { if (f.contentWindow.location.href !== 'about:blank') return; } catch (e) { return; }
+        f.removeEventListener('load', again);
+        f.setAttribute('src', src);
+      });
+      f.setAttribute('src', 'about:blank');
+    };
+    // Block the ways scripts add a sandbox before the frame loads: setAttribute, the `sandbox`
+    // property and its token list (which then belongs to a spare frame that is never shown).
+    var setAttr = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (name) {
+      if (this instanceof HTMLIFrameElement && String(name).toLowerCase() === 'sandbox') return;
+      return setAttr.apply(this, arguments);
+    };
+    try {
+      var spareList = document.createElement('iframe').sandbox;
+      Object.defineProperty(HTMLIFrameElement.prototype, 'sandbox', {
+        configurable: true,
+        get: function () { return spareList; },
+        set: function () {},
+      });
+    } catch (e) {}
+    new MutationObserver(function (records) {
+      records.forEach(function (r) {
+        if (r.type === 'attributes') { unsandbox(r.target); return; }
+        r.addedNodes.forEach(function (n) {
+          if (n.nodeType !== 1) return;
+          if (n.tagName === 'IFRAME') unsandbox(n);
+          else if (n.querySelectorAll) [].forEach.call(n.querySelectorAll('iframe[sandbox]'), unsandbox);
+        });
+      });
+    }).observe(document.documentElement || document, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['sandbox'],
+    });
   }
 
   // --- Remote control of <video> elements, relayed into cross-origin frames ---
