@@ -10,4 +10,10 @@
       localStorage.setItem('nhltvDarkDefault', '1');
     }
   } catch (e) {}
+
+  // Game pages open with the stream chat collapsed. The site's chat button toggles the
+  // "hide_chat" class on <body>, so it still opens the chat.
+  document.addEventListener('DOMContentLoaded', function () {
+    if (document.querySelector('.chatbox_area')) document.body.classList.add('hide_chat');
+  });
 })();
