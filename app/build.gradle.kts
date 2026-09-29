@@ -19,6 +19,8 @@ android {
         targetSdk = 34
         versionCode = buildNumber
         versionName = "1.2.$buildNumber"
+        // GitHub repo whose latest release the in-app updater checks.
+        buildConfigField("String", "UPDATE_REPO", "\"eli-samuel/fire-tv-apps\"")
     }
 
     buildFeatures {
@@ -36,6 +38,8 @@ android {
             // Off-site top-level navigations allowed besides the site itself (sign-in providers).
             buildConfigField("String[]", "NAV_ALLOWLIST", "{\"google.com\", \"facebook.com\", \"apple.com\"}")
             buildConfigField("boolean", "STRICT_NAV", "false")
+            // Release asset name; must match the file names in .github/workflows/build.yml.
+            buildConfigField("String", "APK_NAME", "\"cinejoy-tv.apk\"")
         }
         create("nhl") {
             dimension = "site"
@@ -44,6 +48,7 @@ android {
             buildConfigField("String[]", "NAV_ALLOWLIST", "{}")
             // Stream sites hide invisible click-overlays that open ads, so nothing may leave the site.
             buildConfigField("boolean", "STRICT_NAV", "true")
+            buildConfigField("String", "APK_NAME", "\"nhl-tv.apk\"")
         }
     }
 

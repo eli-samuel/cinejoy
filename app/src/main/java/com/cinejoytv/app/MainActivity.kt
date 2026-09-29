@@ -41,6 +41,7 @@ class MainActivity : Activity() {
     private lateinit var cursor: CursorView
     private lateinit var prefs: SharedPreferences
     private lateinit var blocker: AdBlocker
+    private lateinit var updater: Updater
     private lateinit var injectJs: String
     private var documentStartScript: ScriptHandler? = null
 
@@ -62,6 +63,7 @@ class MainActivity : Activity() {
         blocker.enabled = prefs.getBoolean("adblock", true)
         blocker.init()
         Site.load(prefs)
+        updater = Updater(this)
 
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         webView = WebView(this)
@@ -74,6 +76,7 @@ class MainActivity : Activity() {
         setupWebView()
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             webView.loadUrl(startUrl())
+            updater.check(manual = false)
         }
         webView.requestFocus()
     }
@@ -377,6 +380,7 @@ class MainActivity : Activity() {
             "Site address: ${Site.domain}",
             "Update filter lists",
             "Clear cache (keeps login)",
+            "Check for updates (build ${BuildConfig.VERSION_CODE})",
             "Exit",
         )
         AlertDialog.Builder(this)
@@ -412,7 +416,8 @@ class MainActivity : Activity() {
                         }
                     }
                     7 -> { webView.clearCache(true); webView.reload() }
-                    8 -> finish()
+                    8 -> updater.check(manual = true)
+                    9 -> finish()
                 }
             }
             .show()
